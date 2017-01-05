@@ -246,8 +246,8 @@ find_package(Eigen REQUIRED)
 include_directories(SYSTEM ${EIGEN_INCLUDE_DIRS})
 add_definitions(-DEIGEN_USE_NEW_STDVECTOR
                 -DEIGEN_YES_I_KNOW_SPARSE_MODULE_IS_NOT_STABLE_YET
-                -DEIGEN_MAX_ALIGN_BYTES 16
-                -DEIGEN_MAX_STATIC_ALIGN_BYTES 16 ) # Eigen 3.3.1 has 32 byte alignment(AVX), and PCL has problems with it (crashes)
+                -DEIGEN_MAX_ALIGN_BYTES=16
+                -DEIGEN_MAX_STATIC_ALIGN_BYTES=16 ) # Eigen 3.3.1 has 32 byte alignment(AVX), and PCL has problems with it (crashes)
 # FLANN (required)
 if(NOT PCL_SHARED_LIBS OR (WIN32 AND NOT MINGW))
   set(FLANN_USE_STATIC ON)
