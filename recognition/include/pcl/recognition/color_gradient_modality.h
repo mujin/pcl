@@ -882,6 +882,17 @@ computeMaxColorGradientsSobel (const typename pcl::PointCloud<pcl::RGB>::ConstPt
 
   const float pi = tanf (1.0f) * 2.0f;
 
+#if __AVX2__
+    // TODO: Make this portable
+    // int32_t dx4[16] __attribute__((aligned(32)));
+    // int32_t dy4[16] __attribute__((aligned(32)));
+    int16_t dx4[16] __attribute__((aligned(32)));
+    int16_t dy4[16] __attribute__((aligned(32)));
+    float sqr_mag_max4[4] __attribute__((aligned(32)));
+    //float angle4[4] __attribute__((aligned(32)));
+    int32_t max_index4[4] __attribute__((aligned(32)));
+#endif
+
   for (int row_index = 1; row_index < height-1; ++row_index)
   {
     int col_index = 1;
@@ -912,95 +923,65 @@ computeMaxColorGradientsSobel (const typename pcl::PointCloud<pcl::RGB>::ConstPt
       __temp = _mm256_cvtepi16_epi32(_mm256_extractf128_si256(__dy, 0));
       __sqr_mag01 = _mm256_add_epi32(__sqr_mag01, _mm256_mul_epi32(__temp, __temp));
 
-      float sqr_mag4[16] __attribute__((aligned(32)));
-      _mm256_store_ps(sqr_mag4, _mm256_sqrt_ps(_mm256_cvtepi32_ps(__sqr_mag01)));
+      __m256 __sqr_mag01f = _mm256_cvtepi32_ps(__sqr_mag01);
+
+      //_mm256_store_ps(sqr_mag4, _mm256_sqrt_ps(_mm256_cvtepi32_ps(__sqr_mag01)));
 
       __temp = _mm256_cvtepi16_epi32(_mm256_extractf128_si256(__dx, 1));
-      __sqr_mag01 = _mm256_mul_epi32(__temp, __temp);
+      __m256i __sqr_mag23 = _mm256_mul_epi32(__temp, __temp);
       __temp = _mm256_cvtepi16_epi32(_mm256_extractf128_si256(__dy, 1));
-      __sqr_mag01 = _mm256_add_epi32(__sqr_mag01, _mm256_mul_epi32(__temp, __temp));
-
-      _mm256_store_ps(&sqr_mag4[8], _mm256_sqrt_ps(_mm256_cvtepi32_ps(__sqr_mag01)));
-
-      //__m128i __pixel01_sqr_mag = _mm256_extractf128_si256(__sqr_mag, 0);
-      //__m128i __pixel23_sqr_mag = _mm256_extractf128_si256(__sqr_mag, 1);
-
-      // TODO: Make this portable
-      int16_t dx4[16] __attribute__((aligned(32)));
-      int16_t dy4[16] __attribute__((aligned(32)));
+      __sqr_mag23 = _mm256_add_epi32(__sqr_mag01, _mm256_mul_epi32(__temp, __temp));
       
+      __m256 __sqr_mag23f = _mm256_cvtepi32_ps(__sqr_mag23);
+
+      //_mm256_store_ps(&sqr_mag4[8], _mm256_sqrt_ps(_mm256_cvtepi32_ps(__sqr_mag01)));
+
+      // r0g0r1g1 r2g2r3g3
+      __m256 __sqr_mag_rg = _mm256_shuffle_ps(__sqr_mag01f, __sqr_mag23f, (1 << 6) + (0 << 2) + (1 << 2) + 0);
+      // r0r1r2r3 g0g1g2g3
+      __sqr_mag_rg = _mm256_permutevar8x32_ps(__sqr_mag_rg, _mm256_set_epi32(7, 5, 3, 1, 6, 4, 2, 0));
+      __m128 __sqr_mag_r = _mm256_extractf128_ps(__sqr_mag_rg, 0);
+      __m128 __sqr_mag_g = _mm256_extractf128_ps(__sqr_mag_rg, 1);
+
+      __m256 __sqr_mag_ba = _mm256_shuffle_ps(__sqr_mag01f, __sqr_mag23f, (3 << 6) + (2 << 2) + (3 << 2) + 2);
+      __sqr_mag_ba = _mm256_permutevar8x32_ps(__sqr_mag_rg, _mm256_set_epi32(7, 5, 3, 1, 6, 4, 2, 0));
+      __m128 __sqr_mag_b = _mm256_extractf128_ps(__sqr_mag_ba, 0);
+
+      __m128 __sqr_mag_max4 = _mm_max_ps(_mm_max_ps(__sqr_mag_r, __sqr_mag_g), __sqr_mag_b);
+      _mm_store_ps(sqr_mag_max4, __sqr_mag_max4);
+
+      __m128 __b_max = _mm_and_ps(_mm_cmpgt_ss(__sqr_mag_b, __sqr_mag_g), _mm_cmpgt_ss(__sqr_mag_b, __sqr_mag_r));
+      __m128 __g_max = _mm_andnot_ps(__b_max, _mm_cmpgt_ss(__sqr_mag_g, __sqr_mag_r));
+
+      // r = 0, g = 1, b = 2
+      __m128i __max_channel_select = _mm_add_epi32(
+          _mm_set_epi32(12, 8, 4, 0),
+          _mm_or_si128(
+              _mm_and_si128(_mm_castps_si128(__b_max), _mm_set1_epi32(2)),
+              _mm_and_si128(_mm_castps_si128(__g_max), _mm_set1_epi32(1))));
+
+      _mm_store_si128((__m128i*) max_index4, __max_channel_select);
+
       _mm256_store_si256((__m256i*) dx4, __dx);
       _mm256_store_si256((__m256i*) dy4, __dy);
 
-      // // test
-      // const int r7 = static_cast<int> (cloud->points[(row_index-1)*width + (col_index-1)].r);
-      // const int g7 = static_cast<int> (cloud->points[(row_index-1)*width + (col_index-1)].g);
-      // const int b7 = static_cast<int> (cloud->points[(row_index-1)*width + (col_index-1)].b);
-      // const int r8 = static_cast<int> (cloud->points[(row_index-1)*width + (col_index)].r);
-      // const int g8 = static_cast<int> (cloud->points[(row_index-1)*width + (col_index)].g);
-      // const int b8 = static_cast<int> (cloud->points[(row_index-1)*width + (col_index)].b);
-      // const int r9 = static_cast<int> (cloud->points[(row_index-1)*width + (col_index+1)].r);
-      // const int g9 = static_cast<int> (cloud->points[(row_index-1)*width + (col_index+1)].g);
-      // const int b9 = static_cast<int> (cloud->points[(row_index-1)*width + (col_index+1)].b);
-      // const int r4 = static_cast<int> (cloud->points[(row_index)*width + (col_index-1)].r);
-      // const int g4 = static_cast<int> (cloud->points[(row_index)*width + (col_index-1)].g);
-      // const int b4 = static_cast<int> (cloud->points[(row_index)*width + (col_index-1)].b);
-      // const int r6 = static_cast<int> (cloud->points[(row_index)*width + (col_index+1)].r);
-      // const int g6 = static_cast<int> (cloud->points[(row_index)*width + (col_index+1)].g);
-      // const int b6 = static_cast<int> (cloud->points[(row_index)*width + (col_index+1)].b);
-      // const int r1 = static_cast<int> (cloud->points[(row_index+1)*width + (col_index-1)].r);
-      // const int g1 = static_cast<int> (cloud->points[(row_index+1)*width + (col_index-1)].g);
-      // const int b1 = static_cast<int> (cloud->points[(row_index+1)*width + (col_index-1)].b);
-      // const int r2 = static_cast<int> (cloud->points[(row_index+1)*width + (col_index)].r);
-      // const int g2 = static_cast<int> (cloud->points[(row_index+1)*width + (col_index)].g);
-      // const int b2 = static_cast<int> (cloud->points[(row_index+1)*width + (col_index)].b);
-      // const int r3 = static_cast<int> (cloud->points[(row_index+1)*width + (col_index+1)].r);
-      // const int g3 = static_cast<int> (cloud->points[(row_index+1)*width + (col_index+1)].g);
-      // const int b3 = static_cast<int> (cloud->points[(row_index+1)*width + (col_index+1)].b);
+      // // Can we avoid this?
+      // _mm256_store_si256((__m256i*) dx4, _mm256_cvtepi16_epi32(_mm256_extractf128_si256(__dx, 0)));
+      // _mm256_store_si256((__m256i*) (&dx4[8]), _mm256_cvtepi16_epi32(_mm256_extractf128_si256(__dx, 1)));
+      // _mm256_store_si256((__m256i*) dy4, _mm256_cvtepi16_epi32(_mm256_extractf128_si256(__dx, 0)));
+      // _mm256_store_si256((__m256i*) (&dy4[8]), _mm256_cvtepi16_epi32(_mm256_extractf128_si256(__dx, 1)));
 
-      // const int r_dx = r9 + 2*r6 + r3 - (r7 + 2*r4 + r1);
-      // const int r_dy = r1 + 2*r2 + r3 - (r7 + 2*r8 + r9);
-      // const int g_dx = g9 + 2*g6 + g3 - (g7 + 2*g4 + g1);
-      // const int g_dy = g1 + 2*g2 + g3 - (g7 + 2*g8 + g9);
-      // const int b_dx = b9 + 2*b6 + b3 - (b7 + 2*b4 + b1);
-      // const int b_dy = b1 + 2*b2 + b3 - (b7 + 2*b8 + b9);
-
-      // const int sqr_mag_r = r_dx*r_dx + r_dy*r_dy;
-      // const int sqr_mag_g = g_dx*g_dx + g_dy*g_dy;
-      // const int sqr_mag_b = b_dx*b_dx + b_dy*b_dy;
-
-      // if (r_dx != 0) {
-      //   int16_t buf[16] __attribute__((aligned(32)));
-      // _mm256_store_si256((__m256i*) buf, __1);
-      // printf("%d %d %d %d %d %d %d %d\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
-      // _mm256_store_si256((__m256i*) buf, __2);
-      // printf("%d %d %d %d %d %d %d %d\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
-
-      //   printf("dx %d %d %d\n", r_dx, g_dx, b_dx);
-      //   printf("dy %d %d %d\n", r_dy, g_dy, b_dy);
-      //   printf("sqr %d %d %d\n", sqr_mag_r, sqr_mag_g, sqr_mag_b);
-
-      //   printf("dx %d %d %d %d\n", dx4[0], dx4[1], dx4[2], dx4[3]);
-      //   printf("dy %d %d %d %d\n", dy4[0], dy4[1], dy4[2], dy4[3]);
-      //   printf("sqr %d %d %d %d\n", sqr_mag4[0], sqr_mag4[1], sqr_mag4[2], sqr_mag4[3]);
-      //   std::exit(-1);
-      // }
-
-
+      // __m128 __max_dx4 = _mm_cvtepi32_ps(_mm_i32gather_epi32(dx4, __max_channel_select, 4));
+      // __m128 __max_dy4 = _mm_cvtepi32_ps(_mm_i32gather_epi32(dy4, __max_channel_select, 4));
+      // __m128 __angle4 = _mm_mul_ps(_mm_atan2_ps(__max_dy4, __max_dx4), _mm_set1_ps(180.0f / pi));
+      // _mm_store_ps(angle4, __angle4);
 
       for (size_t pixelId = 0; pixelId < 4; ++pixelId) {
-          uint8_t max_channel;
-          if (sqr_mag4[4 * pixelId + 0] > sqr_mag4[4 * pixelId + 1] && sqr_mag4[4 * pixelId] > sqr_mag4[4 * pixelId + 2]) {
-            max_channel = 0;
-          } else {
-            max_channel = sqr_mag4[4 * pixelId + 1] > sqr_mag4[4 * pixelId + 2] ? 1 : 2;
-          }
-
-          size_t id = 4 * pixelId + max_channel;
           GradientXY &gradient = color_gradients_(col_index + pixelId, row_index);
-          gradient.magnitude = sqr_mag4[id];
-          gradient.angle = atan2f(static_cast<float>(dy4[id]), static_cast<float>(dx4[id])) * (180.0f / pi);
-          gradient.x = static_cast<float> (col_index);
+          gradient.magnitude = sqr_mag_max4[pixelId];
+          const int32_t max_index = max_index4[pixelId];
+          gradient.angle = atan2f(static_cast<float>(dy4[max_index]), static_cast<float>(dx4[max_index])) * (180.0f / pi);
+          gradient.x = static_cast<float> (col_index + pixelId);
           gradient.y = static_cast<float> (row_index);
 
           assert(gradient.angle >= -180 &&
