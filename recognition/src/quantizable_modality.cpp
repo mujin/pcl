@@ -36,6 +36,7 @@
  */
 
 #include <pcl/recognition/quantizable_modality.h>
+#include <pcl/common/time.h>
 #include <cstddef>
 #include <string.h>
 
@@ -100,11 +101,20 @@ spreadQuantizedMap (const QuantizedMap & input_map, QuantizedMap & output_map, c
   QuantizedMap tmp_map (width, height);
   output_map.resize (width, height);
 
-  for (size_t row_index = 0; row_index < height-spreading_size-1; ++row_index)
+  const int col_index_max = width-spreading_size-1;
+  const int col_index_max_avx2 = width-spreading_size-1-32;
+  const int row_index_max = height-spreading_size-1;
+
+  std::cout << width << " " << height << " " << col_index_max << " " << col_index_max_avx2 << " " << row_index_max << " HERE3.0" << std::endl;
+
+  double total1 = 0, total2 = 0, total3 = 0, total4 = 0;
+  double now = pcl::getTime ();
+  for (int row_index = 0; row_index < row_index_max; ++row_index)
   {
-    size_t col_index = 0;
+    int col_index = 0;
 #if __AVX2__
-    for (; col_index <= width-spreading_size-1-32; col_index+=32) {
+    now = pcl::getTime ();
+    for (; col_index <= col_index_max_avx2; col_index+=32) {
       __m256i __value = _mm256_setzero_si256();
       const unsigned char * data_ptr = &(input_map (col_index, row_index));
       for (size_t spreading_index = 0; spreading_index < spreading_size; ++spreading_index, ++data_ptr)
@@ -113,11 +123,13 @@ spreadQuantizedMap (const QuantizedMap & input_map, QuantizedMap & output_map, c
       }
       _mm256_storeu_si256((__m256i*) &tmp_map(col_index + half_spreading_size, row_index), __value);
     }
+    total1 += pcl::getTime () - now;
 #endif
-    for (; col_index < width-spreading_size-1; ++col_index)
+    now = pcl::getTime ();
+    for (; col_index < col_index_max; ++col_index)
     {
       unsigned char value = 0;
-      const unsigned char * data_ptr = &(input_map (col_index, row_index));;
+      const unsigned char * data_ptr = &(input_map (col_index, row_index));
       for (size_t spreading_index = 0; spreading_index < spreading_size; ++spreading_index, ++data_ptr)
       {
         value |= *data_ptr;
@@ -125,13 +137,15 @@ spreadQuantizedMap (const QuantizedMap & input_map, QuantizedMap & output_map, c
 
       tmp_map (col_index + half_spreading_size, row_index) = value;
     }
+    total2 += pcl::getTime () - now;
   }
 
-  for (size_t row_index = 0; row_index < height-spreading_size-1; ++row_index)
+  for (int row_index = 0; row_index < row_index_max; ++row_index)
   {
-    size_t col_index = 0;
+    int col_index = 0;
+    now = pcl::getTime ();
 #if __AVX2__
-    for (; col_index <= width-spreading_size-1-32; col_index+=32)
+    for (; col_index <= col_index_max_avx2; col_index+=32)
     {
       __m256i __value = _mm256_setzero_si256();
       const unsigned char * data_ptr = &(tmp_map (col_index, row_index));
@@ -141,8 +155,11 @@ spreadQuantizedMap (const QuantizedMap & input_map, QuantizedMap & output_map, c
       }
       _mm256_storeu_si256((__m256i*) &output_map (col_index, row_index + half_spreading_size), __value);
     }
+    total3 += pcl::getTime () - now;
 #endif
-    for (; col_index < width-spreading_size-1; ++col_index)
+    now = pcl::getTime ();
+
+    for (; col_index < col_index_max; ++col_index)
     {
       unsigned char value = 0;
       const unsigned char * data_ptr = &(tmp_map (col_index, row_index));
@@ -153,5 +170,7 @@ spreadQuantizedMap (const QuantizedMap & input_map, QuantizedMap & output_map, c
 
       output_map (col_index, row_index + half_spreading_size) = value;
     }
+    total4 += pcl::getTime () - now;
   }
+  std::cout << total1 << " " << total2 << " " << total3 << " " << total4 << std::endl;
 }
