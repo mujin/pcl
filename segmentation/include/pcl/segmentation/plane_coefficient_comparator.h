@@ -187,16 +187,24 @@ namespace pcl
       virtual bool
       compare (int idx1, int idx2) const
       {
+        Eigen::Vector3f normal1 = normals_->points[idx1].getNormalVector3fMap ();
+        Eigen::Vector3f normal2 = normals_->points[idx2].getNormalVector3fMap ();
+        if (fabs(normal1.dot(normal2)) <= angular_threshold_ )
+          return false;
+
         float threshold = distance_threshold_;
-        if (depth_dependent_)
+        if (false && depth_dependent_)
         {
           Eigen::Vector3f vec = input_->points[idx1].getVector3fMap ();
-          
           float z = vec.dot (z_axis_);
           threshold *= z * z;
         }
-        return ( (fabs ((*plane_coeff_d_)[idx1] - (*plane_coeff_d_)[idx2]) < threshold)
-                 && (normals_->points[idx1].getNormalVector3fMap ().dot (normals_->points[idx2].getNormalVector3fMap () ) > angular_threshold_ ) );
+        Eigen::Vector3f diff = input_->points[idx1].getVector3fMap() - input_->points[idx2].getVector3fMap ();
+        if (fabs(normal1.dot(diff)) >= threshold)
+          return false;
+        if (fabs(normal2.dot(diff)) >= threshold)
+          return false;
+        return true;
       }
       
     protected:
