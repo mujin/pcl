@@ -236,6 +236,7 @@ pcl::LINEMOD::removeOverlappingDetections (
 
   typedef std::tuple<size_t, size_t, size_t> ClusteringKey;
   std::map<ClusteringKey, std::vector<size_t>> clusters;
+  std::map<ClusteringKey, int> indexToBestScoreInCluster;
   for (size_t detection_id = 0; detection_id < nr_detections; ++detection_id)
   {
     const LINEMODDetection& d = detections[detection_id];
@@ -246,13 +247,17 @@ pcl::LINEMOD::removeOverlappingDetections (
     };
 
     clusters[key].push_back(detection_id);
+    if(detections[detection_id].score > detections[clusters[key][indexToBestScoreInCluster[key]]].score){
+      indexToBestScoreInCluster[key] = clusters[key].size() - 1;
+    }
   }
 
   // compute detection representatives for every cluster
   std::vector<LINEMODDetection> clustered_detections;
   size_t cluster_id;
   std::map<ClusteringKey, std::vector<size_t>>::iterator it;
-  for (cluster_id = 0, it = clusters.begin(); it != clusters.end(); ++cluster_id, ++it)
+  std::map<ClusteringKey, int>::iterator itIndexToBestScoreInCluster;
+  for (cluster_id = 0, it = clusters.begin(), itIndexToBestScoreInCluster = indexToBestScoreInCluster.begin(); it != clusters.end(); ++cluster_id, ++it, ++itIndexToBestScoreInCluster)
   {
     const std::vector<size_t>& cluster = it->second;
     float weight_sum = 0.0f;
@@ -292,7 +297,7 @@ pcl::LINEMOD::removeOverlappingDetections (
     average_rz *= inv_weight_sum;
 
     float min_dist2 = std::numeric_limits<float>::max ();
-    size_t best_template_id = detections[cluster[0]].template_id;
+    size_t best_template_id = detections[cluster[itIndexToBestScoreInCluster->second]].template_id;
     for (size_t template_index = 0; template_index < n_templates; ++template_index)
     {
       // Skip templates that does not belong to the same cluster
@@ -1063,6 +1068,16 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
     const float max_scale,
     const float scale_multiplier) const
 {
+#ifdef LINEMOD_USE_SEPARATE_ENERGY_MAPS
+  PCL_INFO ("linemod_detectTemplatesSemiScaleInvariant: LINEMOD_USE_SEPARATE_ENERGY_MAPS defined.\n");
+#endif
+#if defined(__AVX2__)
+  PCL_INFO ("linemod_detectTemplatesSemiScaleInvariant: __AVX2__ defined.\n");
+#endif
+#if defined(__SSE2__)
+  PCL_INFO ("linemod_detectTemplatesSemiScaleInvariant: __SSE2__ defined.\n");
+#endif
+
   // create energy maps
   std::vector<EnergyMaps> modality_energy_maps;
 #ifdef LINEMOD_USE_SEPARATE_ENERGY_MAPS
