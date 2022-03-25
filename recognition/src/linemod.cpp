@@ -316,11 +316,14 @@ pcl::LINEMOD::removeOverlappingDetections (
     }
 
     LINEMODDetection detection;
-    detection.template_id = best_template_id;
-    detection.score = average_score * inv_weight_sum * std::exp(-0.5f / elements_in_cluster);
-    detection.scale = average_scale * inv_weight_sum;
-    detection.x = int (average_region_x * inv_weight_sum);
-    detection.y = int (average_region_y * inv_weight_sum);
+    detection = detections[cluster[itIndexToBestScoreInCluster->second]];
+    // TODO:add also distant one in shortest extents' direction (assume always the same template in one cluster) 
+
+    // detection.template_id = best_template_id;
+    // detection.score = average_score * inv_weight_sum * std::exp(-0.5f / elements_in_cluster);
+    // detection.scale = average_scale * inv_weight_sum;
+    // detection.x = int (average_region_x * inv_weight_sum);
+    // detection.y = int (average_region_y * inv_weight_sum);
 
     clustered_detections.push_back (detection);
   }
