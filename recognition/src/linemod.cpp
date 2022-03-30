@@ -176,7 +176,9 @@ void
 pcl::LINEMOD::removeOverlappingDetections (
     std::vector<LINEMODDetection> & detections,
     size_t translation_clustering_threshold,
-    float rotation_clustering_threshold) const
+    float rotation_clustering_threshold,
+    bool useCriticalDirectionIn2DClustering,
+    size_t translationClusteringThreshold2DInCriticalDirection) const
 {
   // check if clustering is disabled
   if (translation_clustering_threshold == 0 && rotation_clustering_threshold == 0.f) {
@@ -188,6 +190,9 @@ pcl::LINEMOD::removeOverlappingDetections (
   }
   if (rotation_clustering_threshold == 0.f) {
     rotation_clustering_threshold = std::numeric_limits<float>::epsilon();
+  }
+  if (useCriticalDirectionIn2DClustering && translationClusteringThreshold2DInCriticalDirection==0){
+    translationClusteringThreshold2DInCriticalDirection = 1;
   }
 
   typedef std::tuple<int, int, int> TemplatesClusteringKey;
@@ -233,17 +238,33 @@ pcl::LINEMOD::removeOverlappingDetections (
 
   // compute overlap between each detection
   const size_t nr_detections = detections.size ();
-
-  typedef std::tuple<size_t, size_t, size_t> ClusteringKey;
+  
+  typedef std::tuple<size_t, size_t, size_t, int> ClusteringKey;
   std::map<ClusteringKey, std::vector<size_t>> clusters;
   std::map<ClusteringKey, int> indexToBestScoreInCluster;
   for (size_t detection_id = 0; detection_id < nr_detections; ++detection_id)
   {
     const LINEMODDetection& d = detections[detection_id];
+    
+    // use criticalDirectionBasedClustering for super long object
+    int criticalDistanceInt;
+    if(useCriticalDirectionIn2DClustering){
+      float criticalDirection[2] = {0.0, 0.0};
+      criticalDirection[0] = templates_[clusteredTemplates[d.template_id]].criticalDirection[0];
+      criticalDirection[1] = templates_[clusteredTemplates[d.template_id]].criticalDirection[1];
+      float criticalDistance = static_cast< float >( d.x * criticalDirection[0] + d.y * criticalDirection[1] ); //std::sqrt(static_cast< float >( d.x * d.x + d.y * d.y ));
+      criticalDistanceInt = static_cast< int >(criticalDistance / translationClusteringThreshold2DInCriticalDirection);
+      PCL_INFO ("[linemod2D_CriticalDirectionBasedClustering]: template %d, criticalDistanceInt %d, translation_clustering_threshold %d\n", d.template_id, criticalDistanceInt, translation_clustering_threshold);
+    }
+    else{
+      criticalDistanceInt = 0;
+    }
+    
     const ClusteringKey key = {
       d.x / translation_clustering_threshold,
       d.y / translation_clustering_threshold,
       clusteredTemplates[d.template_id],
+      criticalDistanceInt,
     };
 
     clusters[key].push_back(detection_id);
@@ -271,6 +292,7 @@ pcl::LINEMOD::removeOverlappingDetections (
     float average_region_y = 0.0f;
 
     const size_t elements_in_cluster = cluster.size ();
+    float sum_score = 0.0f;
     for (size_t cluster_index = 0; cluster_index < elements_in_cluster; ++cluster_index)
     {
       const size_t detection_id = cluster[cluster_index];
@@ -278,6 +300,7 @@ pcl::LINEMOD::removeOverlappingDetections (
       const pcl::SparseQuantizedMultiModTemplate& template_ = templates_[d.template_id];
 
       const float weight = d.score * d.score;
+      sum_score += d.score;
 
       weight_sum += weight;
 
@@ -289,6 +312,7 @@ pcl::LINEMOD::removeOverlappingDetections (
       average_region_x += static_cast<float>(d.x) * weight;
       average_region_y += static_cast<float>(d.y) * weight;
     }
+    // PCL_INFO ("[bao]: cluster_index %d, numInCluster %d, averageScore %g, bestScore %g\n", cluster_id, elements_in_cluster, sum_score/elements_in_cluster, detections[cluster[itIndexToBestScoreInCluster->second]].score);
 
     const float inv_weight_sum = 1.0f / weight_sum;
 

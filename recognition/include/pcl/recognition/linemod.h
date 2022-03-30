@@ -372,7 +372,9 @@ namespace pcl
       void
       removeOverlappingDetections (std::vector<LINEMODDetection> & detections,
                                    size_t translation_clustering_threshold,
-                                   float rotation_clustering_threshold) const;
+                                   float rotation_clustering_threshold,
+                                   bool useCriticalDirectionIn2DClustering = false,
+                                   size_t translationClusteringThreshold2DInCriticalDirection = 0) const;
 
       void
       sortDetections (std::vector<LINEMODDetection> & detections) const;

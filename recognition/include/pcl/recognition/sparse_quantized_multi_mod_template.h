@@ -117,6 +117,9 @@ namespace pcl
     /** \brief The rotations assigned to the template. */
     float rx, ry, rz;
 
+    /** \brief for super long object, the direction perpendiculr to longest axis is critical (should lower clustering threshold)*/
+    float criticalDirection[2] = {0.0, 0.0};
+
     /** \brief The region assigned to the template. */
     RegionXY region;
 
