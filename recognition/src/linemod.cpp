@@ -254,10 +254,10 @@ pcl::LINEMOD::removeOverlappingDetections (
       criticalDirection[1] = templates_[clusteredTemplates[d.template_id]].criticalDirection[1];
       float criticalDistance = static_cast< float >( d.x * criticalDirection[0] + d.y * criticalDirection[1] ); //std::sqrt(static_cast< float >( d.x * d.x + d.y * d.y ));
       criticalDistanceInt = static_cast< int >(criticalDistance / translationClusteringThreshold2DInCriticalDirection);
-      PCL_INFO ("[linemod2D_CriticalDirectionBasedClustering]: template %d, criticalDistanceInt %d, translation_clustering_threshold %d\n", d.template_id, criticalDistanceInt, translation_clustering_threshold);
+      // PCL_INFO ("[linemod2D_CriticalDirectionBasedClustering]: template %d, criticalDistanceInt %d, translation_clustering_threshold %d\n", d.template_id, criticalDistanceInt, translation_clustering_threshold);
     }
     else{
-      criticalDistanceInt = 0;
+      criticalDistanceInt = 0;  //not using critical-direction
     }
     
     const ClusteringKey key = {
@@ -292,7 +292,6 @@ pcl::LINEMOD::removeOverlappingDetections (
     float average_region_y = 0.0f;
 
     const size_t elements_in_cluster = cluster.size ();
-    float sum_score = 0.0f;
     for (size_t cluster_index = 0; cluster_index < elements_in_cluster; ++cluster_index)
     {
       const size_t detection_id = cluster[cluster_index];
@@ -300,7 +299,6 @@ pcl::LINEMOD::removeOverlappingDetections (
       const pcl::SparseQuantizedMultiModTemplate& template_ = templates_[d.template_id];
 
       const float weight = d.score * d.score;
-      sum_score += d.score;
 
       weight_sum += weight;
 
@@ -312,7 +310,6 @@ pcl::LINEMOD::removeOverlappingDetections (
       average_region_x += static_cast<float>(d.x) * weight;
       average_region_y += static_cast<float>(d.y) * weight;
     }
-    // PCL_INFO ("[bao]: cluster_index %d, numInCluster %d, averageScore %g, bestScore %g\n", cluster_id, elements_in_cluster, sum_score/elements_in_cluster, detections[cluster[itIndexToBestScoreInCluster->second]].score);
 
     const float inv_weight_sum = 1.0f / weight_sum;
 
@@ -341,13 +338,6 @@ pcl::LINEMOD::removeOverlappingDetections (
 
     LINEMODDetection detection;
     detection = detections[cluster[itIndexToBestScoreInCluster->second]];
-    // TODO:add also distant one in shortest extents' direction (assume always the same template in one cluster) 
-
-    // detection.template_id = best_template_id;
-    // detection.score = average_score * inv_weight_sum * std::exp(-0.5f / elements_in_cluster);
-    // detection.scale = average_scale * inv_weight_sum;
-    // detection.x = int (average_region_x * inv_weight_sum);
-    // detection.y = int (average_region_y * inv_weight_sum);
 
     clustered_detections.push_back (detection);
   }
