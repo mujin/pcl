@@ -177,99 +177,59 @@ pcl::LINEMOD::removeOverlappingDetections (
     std::vector<LINEMODDetection> & detections,
     size_t translation_clustering_threshold,
     float rotation_clustering_threshold,
-    bool useCriticalDirectionIn2DClustering,
-    size_t translationClusteringThreshold2DInCriticalDirection) const
+    bool use_critical_direction_in_2D_clustering,
+    size_t translation_clustering_threshold_2D_in_critical_direction) const
 {
   // check if clustering is disabled
   if (translation_clustering_threshold == 0 && rotation_clustering_threshold == 0.f) {
     return;
   }
-
   if (translation_clustering_threshold == 0) {
     translation_clustering_threshold = 1;
   }
   if (rotation_clustering_threshold == 0.f) {
     rotation_clustering_threshold = std::numeric_limits<float>::epsilon();
   }
-  if (useCriticalDirectionIn2DClustering && translationClusteringThreshold2DInCriticalDirection==0){
-    translationClusteringThreshold2DInCriticalDirection = 1;
-  }
 
-  typedef std::tuple<int, int, int> TemplatesClusteringKey;
-  std::map<TemplatesClusteringKey, std::vector<size_t>> templateClusters;
   const size_t n_templates = templates_.size ();
-  for (size_t template_index = 0; template_index < n_templates; ++template_index)
-  {
-    const pcl::SparseQuantizedMultiModTemplate& template_ = templates_[template_index];
-    const TemplatesClusteringKey key = {
-      static_cast<int>(template_.rx / rotation_clustering_threshold),
-      static_cast<int>(template_.ry / rotation_clustering_threshold),
-      static_cast<int>(template_.rz / rotation_clustering_threshold),
-    };
-
-    templateClusters[key].push_back(template_index);
-  }
-
-  std::vector<size_t> clusteredTemplates(n_templates, std::numeric_limits<size_t>::max()); // index is template_index
-  if (templateClusters.size() <= 1) {
-    PCL_ERROR ("[removeOverlappingDetections] All %u templates got grouped into %u cluster(s). Either rotation threshold=%.4f is too large, or template rotations are not set properly.\n"
-               "Making each template in its own cluster for now...\n", n_templates, templateClusters.size(), rotation_clustering_threshold);
-    for (size_t template_index = 0; template_index < n_templates; ++template_index)
-    {
-      clusteredTemplates[template_index] = template_index;
-    }
-  }
-  else
-  {
-    PCL_INFO ("[removeOverlappingDetections] Grouping %u templates into %u clusters\n", n_templates, templateClusters.size());
-    size_t cluster_id;
-    std::map<TemplatesClusteringKey, std::vector<size_t>>::iterator tempIt;
-    for (cluster_id = 0, tempIt = templateClusters.begin(); tempIt != templateClusters.end(); ++cluster_id, ++tempIt)
-    {
-      const std::vector<size_t>& cluster = tempIt->second;
-      const size_t elements_in_cluster = cluster.size ();
-      for (size_t cluster_index = 0; cluster_index < elements_in_cluster; ++cluster_index)
-      {
-        const size_t template_index = cluster[cluster_index];
-        clusteredTemplates[template_index] = cluster_id;
-      }
-    }
-  }
+  
+  PCL_INFO ("[removeOverlappingDetections] All %u templates got grouped into %u cluster(s). Either rotation threshold=%.4f is too large, or template rotations are not set properly.\n"
+            "Making each template in its own cluster\n", n_templates, 1, rotation_clustering_threshold);
 
   // compute overlap between each detection
   const size_t nr_detections = detections.size ();
   
   typedef std::tuple<size_t, size_t, size_t, int> ClusteringKey;
   std::map<ClusteringKey, std::vector<size_t>> clusters;
-  std::map<ClusteringKey, int> indexToBestScoreInCluster;
+  std::map<ClusteringKey, int> index_to_best_score_in_cluster;
   for (size_t detection_id = 0; detection_id < nr_detections; ++detection_id)
   {
     const LINEMODDetection& d = detections[detection_id];
     
-    // use criticalDirectionBasedClustering for super long object
-    int criticalDistanceInt;
-    if(useCriticalDirectionIn2DClustering){
+    // use critical Direction Based Clustering for super long object
+    int critical_distance_int;
+    if(use_critical_direction_in_2D_clustering){
       float criticalDirection[2] = {0.0, 0.0};
-      criticalDirection[0] = templates_[clusteredTemplates[d.template_id]].criticalDirection[0];
-      criticalDirection[1] = templates_[clusteredTemplates[d.template_id]].criticalDirection[1];
+      criticalDirection[0] = templates_[d.template_id].criticalDirection[0];
+      criticalDirection[1] = templates_[d.template_id].criticalDirection[1];
       float criticalDistance = static_cast< float >( d.x * criticalDirection[0] + d.y * criticalDirection[1] ); //std::sqrt(static_cast< float >( d.x * d.x + d.y * d.y ));
-      criticalDistanceInt = static_cast< int >(criticalDistance / translationClusteringThreshold2DInCriticalDirection);
-      // PCL_INFO ("[linemod2D_CriticalDirectionBasedClustering]: template %d, criticalDistanceInt %d, translation_clustering_threshold %d\n", d.template_id, criticalDistanceInt, translation_clustering_threshold);
+      critical_distance_int = static_cast< int >(criticalDistance / translation_clustering_threshold_2D_in_critical_direction);
+      // PCL_INFO ("[linemod2D_CriticalDirectionBasedClustering]: template %d, critical_distance_int %d, translation_clustering_threshold %d\n", d.template_id, critical_distance_int, translation_clustering_threshold);
     }
     else{
-      criticalDistanceInt = 0;  //not using critical-direction
+      critical_distance_int = 0;  //not using critical-direction
     }
     
     const ClusteringKey key = {
       d.x / translation_clustering_threshold,
       d.y / translation_clustering_threshold,
-      clusteredTemplates[d.template_id],
-      criticalDistanceInt,
+      d.template_id,
+      critical_distance_int,
     };
 
     clusters[key].push_back(detection_id);
-    if(detections[detection_id].score > detections[clusters[key][indexToBestScoreInCluster[key]]].score){
-      indexToBestScoreInCluster[key] = clusters[key].size() - 1;
+    if(detections[detection_id].score > detections[clusters[key][index_to_best_score_in_cluster[key]]].score){
+      index_to_best_score_in_cluster[key] = clusters[key].size() - 1;
     }
   }
 
@@ -277,67 +237,13 @@ pcl::LINEMOD::removeOverlappingDetections (
   std::vector<LINEMODDetection> clustered_detections;
   size_t cluster_id;
   std::map<ClusteringKey, std::vector<size_t>>::iterator it;
-  std::map<ClusteringKey, int>::iterator itIndexToBestScoreInCluster;
-  for (cluster_id = 0, it = clusters.begin(), itIndexToBestScoreInCluster = indexToBestScoreInCluster.begin(); it != clusters.end(); ++cluster_id, ++it, ++itIndexToBestScoreInCluster)
+  std::map<ClusteringKey, int>::iterator itindex_to_best_score_in_cluster;
+  for (cluster_id = 0, it = clusters.begin(), itindex_to_best_score_in_cluster = index_to_best_score_in_cluster.begin(); it != clusters.end(); ++cluster_id, ++it, ++itindex_to_best_score_in_cluster)
   {
     const std::vector<size_t>& cluster = it->second;
-    float weight_sum = 0.0f;
-
-    float average_score = 0.0f;
-    float average_scale = 0.0f;
-    float average_rx = 0.0f;
-    float average_ry = 0.0f;
-    float average_rz = 0.0f;
-    float average_region_x = 0.0f;
-    float average_region_y = 0.0f;
-
-    const size_t elements_in_cluster = cluster.size ();
-    for (size_t cluster_index = 0; cluster_index < elements_in_cluster; ++cluster_index)
-    {
-      const size_t detection_id = cluster[cluster_index];
-      const LINEMODDetection& d = detections[detection_id];
-      const pcl::SparseQuantizedMultiModTemplate& template_ = templates_[d.template_id];
-
-      const float weight = d.score * d.score;
-
-      weight_sum += weight;
-
-      average_score += d.score * weight;
-      average_scale += d.scale * weight;
-      average_rx += template_.rx * weight;
-      average_ry += template_.ry * weight;
-      average_rz += template_.rz * weight;
-      average_region_x += static_cast<float>(d.x) * weight;
-      average_region_y += static_cast<float>(d.y) * weight;
-    }
-
-    const float inv_weight_sum = 1.0f / weight_sum;
-
-    average_rx *= inv_weight_sum;
-    average_ry *= inv_weight_sum;
-    average_rz *= inv_weight_sum;
-
-    float min_dist2 = std::numeric_limits<float>::max ();
-    size_t best_template_id = detections[cluster[itIndexToBestScoreInCluster->second]].template_id;
-    for (size_t template_index = 0; template_index < n_templates; ++template_index)
-    {
-      // Skip templates that does not belong to the same cluster
-      // This is also important to protect wrong ID assignment in case all rotations are not set, thus ended up to have the same distance
-      if (clusteredTemplates[best_template_id] != clusteredTemplates[template_index]) {
-        continue;
-      }
-
-      const pcl::SparseQuantizedMultiModTemplate& template_ = templates_[template_index];
-      const float dist2 = std::pow(template_.rx - average_rx, 2) + std::pow(template_.ry - average_ry, 2) + std::pow(template_.rz - average_rz, 2);
-      if (dist2 < min_dist2)
-      {
-        min_dist2 = dist2;
-        best_template_id = template_index;
-      }
-    }
 
     LINEMODDetection detection;
-    detection = detections[cluster[itIndexToBestScoreInCluster->second]];
+    detection = detections[cluster[itindex_to_best_score_in_cluster->second]];
 
     clustered_detections.push_back (detection);
   }
