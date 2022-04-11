@@ -182,19 +182,20 @@ pcl::LINEMOD::removeOverlappingDetections (
 {
   // check if clustering is disabled
   if (translation_clustering_threshold == 0 && rotation_clustering_threshold == 0.f) {
+    PCL_ERROR ("clustering is disabled, as translation_clustering_threshold = %d and rotation_clustering_threshold = %g\n", translation_clustering_threshold, rotation_clustering_threshold);
     return;
   }
   if (translation_clustering_threshold == 0) {
     translation_clustering_threshold = 1;
   }
-  if (rotation_clustering_threshold == 0.f) {
-    rotation_clustering_threshold = std::numeric_limits<float>::epsilon();
-  }
+  // if (rotation_clustering_threshold == 0.f) {
+  //   rotation_clustering_threshold = std::numeric_limits<float>::epsilon();
+  // }
 
   const size_t n_templates = templates_.size ();
   
-  PCL_INFO ("[removeOverlappingDetections] All %u templates got grouped into %u cluster(s). Either rotation threshold=%.4f is too large, or template rotations are not set properly.\n"
-            "Making each template in its own cluster\n", n_templates, 1, rotation_clustering_threshold);
+  // PCL_INFO ("[removeOverlappingDetections] All %u templates got grouped into %u cluster(s). Either rotation threshold=%.4f is too large, or template rotations are not set properly.\n"
+  //           "Making each template in its own cluster\n", n_templates, 1, rotation_clustering_threshold);
 
   // compute overlap between each detection
   const size_t nr_detections = detections.size ();
