@@ -53,6 +53,8 @@
 
 //#define LINEMOD_USE_SEPARATE_ENERGY_MAPS
 
+bool scoreComp(pcl::LINEMODDetection& i, pcl::LINEMODDetection& j){return i.score > j.score;}
+
 //////////////////////////////////////////////////////////////////////////////////////////////
 pcl::LINEMOD::LINEMOD () 
   : template_threshold_ (0.75f)
@@ -1109,7 +1111,7 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
 
       size_t index = 0;
 #if defined(__AVX2__) && !defined(LINEMOD_USE_SEPARATE_ENERGY_MAPS)
-      const __m256i __val0 = _mm256_set1_epi8(val0);
+      const __m256i __val0 = _mm256_set1_epi8(val0); // set 32 Bytes vector to val0, SIMD
       const __m256i __val1 = _mm256_set1_epi8(val1);
       const __m256i __val2 = _mm256_set1_epi8(val2);
       const __m256i __val3 = _mm256_set1_epi8(val3);
@@ -1119,6 +1121,10 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
       {
         const __m256i __quantized_data = _mm256_loadu_si256((const __m256i*)&quantized_data[index]);
 
+        // _mm256_add_epi8: Add packed 8-bit integers in a and b, and store the results in dst.
+        // _mm256_andnot_si256: Compute the bitwise NOT of 256 bits (representing integer data) in a and then AND with b, and store the result in dst.
+        // _mm256_cmpeq_epi8: Compare packed 8-bit integers in a and b for equality, and store the results in dst.
+        // _mm256_and_si256: Compute the bitwise AND of 256 bits (representing integer data) in a and b, and store the result in dst.
         const __m256i __sum =
           _mm256_add_epi8(_mm256_add_epi8(_mm256_add_epi8(
             _mm256_andnot_si256(_mm256_cmpeq_epi8(_mm256_and_si256(__val0, __quantized_data), __zero), __one),
@@ -1126,6 +1132,7 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
             _mm256_andnot_si256(_mm256_cmpeq_epi8(_mm256_and_si256(__val2, __quantized_data), __zero), __one)),
             _mm256_andnot_si256(_mm256_cmpeq_epi8(_mm256_and_si256(__val3, __quantized_data), __zero), __one));
 
+        // _mm256_store_si256: put the values of 256bit integer vector b, to the 256bit aligned memory address indicated by a.
         _mm256_store_si256((__m256i*) &energy_map_bin[index], __sum);
       }
 #endif
@@ -1168,12 +1175,12 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
   std::vector<std::vector<LinearizedMaps> > modality_linearized_maps_2;
   std::vector<std::vector<LinearizedMaps> > modality_linearized_maps_3;
 #endif
-  for (size_t modality_index = 0; modality_index < nr_modalities; ++modality_index)
+  for (size_t modality_index = 0; modality_index < nr_modalities; ++modality_index)  // copy the values in energy_maps into Linearized_maps
   {
     const size_t width = modality_energy_maps[modality_index].getWidth ();
     const size_t height = modality_energy_maps[modality_index].getHeight ();
 
-    std::vector<LinearizedMaps> linearized_maps;
+    std::vector<LinearizedMaps> linearized_maps;  // a vector of linearizedMap for each bin
 #ifdef LINEMOD_USE_SEPARATE_ENERGY_MAPS
     std::vector<LinearizedMaps> linearized_maps_1;
     std::vector<LinearizedMaps> linearized_maps_2;
@@ -1221,7 +1228,7 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
             {
               const size_t tmp_col_index = col_index*step_size + map_col;
 
-              linearized_map[row_index*lin_width + col_index] = energy_map[tmp_row_index*width + tmp_col_index];
+              linearized_map[row_index*lin_width + col_index] = energy_map[tmp_row_index*width + tmp_col_index];  // [important!] extract energy map pixels by step_size, and save them together in a linear map. So totally step_size*step_size linearMaps.
 #ifdef LINEMOD_USE_SEPARATE_ENERGY_MAPS
               linearized_map_1[row_index*lin_width + col_index] = energy_map_1[tmp_row_index*width + tmp_col_index];
               linearized_map_2[row_index*lin_width + col_index] = energy_map_2[tmp_row_index*width + tmp_col_index];
@@ -1254,7 +1261,7 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
   // compute scores for templates
   const size_t width = modality_energy_maps[0].getWidth ();
   const size_t height = modality_energy_maps[0].getHeight ();
-  const size_t mem_width = width / step_size;
+  const size_t mem_width = width / step_size;  // step_size is the step_size of sliding window.
   const size_t mem_height = height / step_size;
   const size_t mem_size = mem_width * mem_height;
 
@@ -1525,12 +1532,12 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
 
 
           //if (score > template_threshold_)
-          if (raw_score > raw_threshold) /// \todo Ask Stefan why this line was used instead of the one above
+          if (raw_score > raw_threshold) /// \todo Ask Stefan why this line was used instead of the one above    // If passing everything, there can be billions of hypotheses.
           {
             const size_t mem_col_index = (mem_index % mem_width);
             const size_t mem_row_index = (mem_index / mem_width);
 
-            if (use_non_max_suppression_)
+            if (use_non_max_suppression_)  // false
             {
               bool is_local_max = true;
               for (size_t sup_row_index = mem_row_index-1; sup_row_index <= mem_row_index+1 && is_local_max; ++sup_row_index)
@@ -1557,7 +1564,7 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
 
             LINEMODDetection detection;
 
-            if (average_detections_)
+            if (average_detections_)  // false
             {
               size_t average_col = 0;
               size_t average_row = 0;
@@ -1597,8 +1604,8 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
             }
             else
             {
-              const size_t detection_col_index = mem_col_index * step_size;
-              const size_t detection_row_index = mem_row_index * step_size;
+              const size_t detection_col_index = mem_col_index * step_size;  // coordinates of the left upper corner of the template
+              const size_t detection_row_index = mem_row_index * step_size;  // coordinates of the left upper corner of the template
 
               detection.x = static_cast<int> (detection_col_index);
               detection.y = static_cast<int> (detection_row_index);
@@ -1638,6 +1645,12 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
       delete[] score_sums_3;
     #endif
   } // #pragma omp parallel
+
+  int numLimit = 1000000;  // limit hypotheses number to one million to save time. 
+  if (detections.size() >= numLimit){
+    std::nth_element(detections.begin(), detections.begin()+numLimit, detections.end(), scoreComp);  // partially sort to get N top scored hypotheses.
+    detections.resize(numLimit);
+  }
 
   // printf("3 %f\n", 1000.0*(getTickCount()-start)/1e9);
   start = getTickCount();
