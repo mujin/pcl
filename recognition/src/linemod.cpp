@@ -177,8 +177,7 @@ pcl::LINEMOD::removeOverlappingDetections (
     std::vector<LINEMODDetection> & detections,
     size_t translation_clustering_threshold,
     float rotation_clustering_threshold,
-    bool use_critical_direction_in_2D_clustering,
-    size_t translation_clustering_threshold_2D_in_critical_direction) const
+    size_t translation_clustering_threshold_2D_in_narrow_direction_of_long_and_narrow_template) const
 {
   // check if clustering is disabled
   if (translation_clustering_threshold == 0 && rotation_clustering_threshold == 0.f) {
@@ -207,25 +206,20 @@ pcl::LINEMOD::removeOverlappingDetections (
   {
     const LINEMODDetection& d = detections[detection_id];
     
-    // use critical Direction Based Clustering for super long object
-    int critical_distance_int;
-    if(use_critical_direction_in_2D_clustering){
-      float criticalDirection[2] = {0.0, 0.0};
-      criticalDirection[0] = templates_[d.template_id].criticalDirection[0];
-      criticalDirection[1] = templates_[d.template_id].criticalDirection[1];
-      float criticalDistance = static_cast< float >( d.x * criticalDirection[0] + d.y * criticalDirection[1] ); //std::sqrt(static_cast< float >( d.x * d.x + d.y * d.y ));
-      critical_distance_int = static_cast< int >(criticalDistance / translation_clustering_threshold_2D_in_critical_direction);
-      // PCL_INFO ("[linemod2D_CriticalDirectionBasedClustering]: template %d, critical_distance_int %d, translation_clustering_threshold %d\n", d.template_id, critical_distance_int, translation_clustering_threshold);
-    }
-    else{
-      critical_distance_int = 0;  //not using critical-direction
-    }
+    // use distance-in-narrow-Direction based Clustering for super long and narrow templates
+    int narrow_direction_distance_int;
+    float narrowDirection[2] = {0.0, 0.0};
+    narrowDirection[0] = templates_[d.template_id].narrowDirectionOfLongAndNarrowTemplate[0];
+    narrowDirection[1] = templates_[d.template_id].narrowDirectionOfLongAndNarrowTemplate[1];
+    float narrowDirectionDistance = static_cast< float >( d.x * narrowDirection[0] + d.y * narrowDirection[1] ); //std::sqrt(static_cast< float >( d.x * d.x + d.y * d.y ));
+    narrow_direction_distance_int = static_cast< int >(narrowDirectionDistance / translation_clustering_threshold_2D_in_narrow_direction_of_long_and_narrow_template);
+    // PCL_INFO ("[linemod2D_NarrowDirectionBasedClustering]: template %d, narrow_direction_distance_int %d, d.x / translation_clustering_threshold %d, d.y / translation_clustering_threshold %d\n", d.template_id, narrow_direction_distance_int, d.x / translation_clustering_threshold, d.y / translation_clustering_threshold);
     
     const ClusteringKey key = {
       d.x / translation_clustering_threshold,
       d.y / translation_clustering_threshold,
       d.template_id,
-      critical_distance_int,
+      narrow_direction_distance_int,
     };
 
     clusters[key].push_back(detection_id);
