@@ -109,13 +109,16 @@ namespace pcl
   struct SparseQuantizedMultiModTemplate
   {
     /** \brief Constructor. */
-    SparseQuantizedMultiModTemplate () : features (), rx (0.f), ry (0.f), rz (0.f), region () {}
+    SparseQuantizedMultiModTemplate () : features (), rx (0.f), ry (0.f), rz (0.f), narrowDirectionOfLongAndNarrowTemplate{0.f, 0.f}, region () {}
 
     /** \brief The storage for the multi-modality features. */
     std::vector<QuantizedMultiModFeature> features;
 
     /** \brief The rotations assigned to the template. */
     float rx, ry, rz;
+
+    /** \brief for super long and narrow template*/
+    float narrowDirectionOfLongAndNarrowTemplate[2];
 
     /** \brief The region assigned to the template. */
     RegionXY region;
