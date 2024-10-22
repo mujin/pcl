@@ -369,10 +369,17 @@ namespace pcl
                                          std::vector<std::vector<LINEMODDetection>>& grouped_detections,
                                          const size_t grouping_threshold) const;
 
+      /** \brief Remove duplicated candidates (with same templateID) in a local neighborhood, in non-maximum-suppression style.
+        * \param[in, out] detections list of candidate detections.
+        * \param[in] translation_clustering_threshold threshold in terms of translation to select neighborhood.
+        * \param[in] rotation_clustering_threshold (not used!) threshold in terms of rotation (meaning 3d rotation, namely different template) to select neighborbood.
+        * \param[in] translation_clustering_threshold_2D_in_narrow_direction_of_long_and_narrow_template a (usually much smaller than translation_clustering_threshold) threshold of translation in narrow direction of template. 
+        */
       void
       removeOverlappingDetections (std::vector<LINEMODDetection> & detections,
                                    size_t translation_clustering_threshold,
-                                   float rotation_clustering_threshold) const;
+                                   float rotation_clustering_threshold,
+                                   size_t translation_clustering_threshold_2D_in_narrow_direction_of_long_and_narrow_template = 1) const;
 
       void
       sortDetections (std::vector<LINEMODDetection> & detections) const;
