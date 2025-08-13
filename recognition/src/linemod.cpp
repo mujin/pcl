@@ -1522,14 +1522,12 @@ pcl::LINEMOD::detectTemplatesSemiScaleInvariant (
             + score_sums_1[mem_index]
             + score_sums_2[mem_index]
             + score_sums_3[mem_index];
-
-          const float score = 2.0f * static_cast<float> (raw_score) * 0.25f * inv_max_score - 1.0f;
+          // const float score = 2.0f * static_cast<float> (raw_score) * 0.25f * inv_max_score - 1.0f;
   #else
           const float raw_score = score_sums[mem_index];
-          float raw_score_rebased = (raw_score - (float (max_score) / 2.0f)) / (float (max_score) / 2.0f);
-
-          // const float score = 2.0f * static_cast<float> (raw_score) * inv_max_score - 1.0f;
+          // const float score = 2.0f * static_cast<float> (raw_score) * inv_max_score - 1.0f;  // Note: switch to use raw_score_rebased
   #endif
+          float raw_score_rebased = (raw_score - (float (max_score) / 2.0f)) / (float (max_score) / 2.0f);
 
 
           //if (score > template_threshold_)
